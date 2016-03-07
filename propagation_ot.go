@@ -1,15 +1,14 @@
 package basictracer
 
 import (
-	"bytes"
 	"encoding/base64"
-	"encoding/binary"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/opentracing/basictracer-go/wire"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -145,48 +144,32 @@ func (p *splitBinaryPropagator) Inject(
 	if !ok {
 		return opentracing.ErrInvalidCarrier
 	}
-	var err error
-	var sampledByte byte
-	if sc.raw.Sampled {
-		sampledByte = 1
-	}
 
-	// Handle the trace and span ids, and sampled status.
-	contextBuf := bytes.NewBuffer(splitBinaryCarrier.TracerState[:0])
-	err = binary.Write(contextBuf, binary.BigEndian, sc.raw.TraceID)
+	state := wire.TracerState{}
+	state.TraceId = sc.raw.TraceID
+	state.SpanId = sc.raw.SpanID
+	state.Sampled = sc.raw.Sampled
+
+	contextBytes, err := proto.Marshal(&state)
 	if err != nil {
 		return err
 	}
+	splitBinaryCarrier.TracerState = contextBytes
 
-	err = binary.Write(contextBuf, binary.BigEndian, sc.raw.SpanID)
-	if err != nil {
-		return err
-	}
+	// Only attempt to encode the baggage if it has items.
+	if len(sc.raw.Baggage) > 0 {
+		sc.Lock()
+		baggage := wire.Baggage{}
+		baggage.Items = sc.raw.Baggage
 
-	err = binary.Write(contextBuf, binary.BigEndian, sampledByte)
-	if err != nil {
-		return err
-	}
-
-	// Handle the baggage.
-	baggageBuf := bytes.NewBuffer(splitBinaryCarrier.Baggage[:0])
-	err = binary.Write(baggageBuf, binary.BigEndian, int32(len(sc.raw.Baggage)))
-	if err != nil {
-		return err
-	}
-	for k, v := range sc.raw.Baggage {
-		if err = binary.Write(baggageBuf, binary.BigEndian, int32(len(k))); err != nil {
+		baggageBytes, err := proto.Marshal(&baggage)
+		sc.Unlock()
+		if err != nil {
 			return err
 		}
-		baggageBuf.WriteString(k)
-		if err = binary.Write(baggageBuf, binary.BigEndian, int32(len(v))); err != nil {
-			return err
-		}
-		baggageBuf.WriteString(v)
+		splitBinaryCarrier.Baggage = baggageBytes
 	}
 
-	splitBinaryCarrier.TracerState = contextBuf.Bytes()
-	splitBinaryCarrier.Baggage = baggageBuf.Bytes()
 	return nil
 }
 
@@ -201,64 +184,34 @@ func (p *splitBinaryPropagator) Join(
 	if len(splitBinaryCarrier.TracerState) == 0 {
 		return nil, opentracing.ErrTraceNotFound
 	}
+
 	// Handle the trace, span ids, and sampled status.
-	contextReader := bytes.NewReader(splitBinaryCarrier.TracerState)
-	var traceID, propagatedSpanID int64
-	var sampledByte byte
-
-	if err := binary.Read(contextReader, binary.BigEndian, &traceID); err != nil {
-		return nil, opentracing.ErrTraceCorrupted
-	}
-	if err := binary.Read(contextReader, binary.BigEndian, &propagatedSpanID); err != nil {
-		return nil, opentracing.ErrTraceCorrupted
-	}
-	if err := binary.Read(contextReader, binary.BigEndian, &sampledByte); err != nil {
+	ctx := wire.TracerState{}
+	if err := proto.Unmarshal(splitBinaryCarrier.TracerState, &ctx); err != nil {
 		return nil, opentracing.ErrTraceCorrupted
 	}
 
-	// Handle the baggage.
-	baggageReader := bytes.NewReader(splitBinaryCarrier.Baggage)
-	var numBaggage int32
-	if err := binary.Read(baggageReader, binary.BigEndian, &numBaggage); err != nil {
-		return nil, opentracing.ErrTraceCorrupted
-	}
-	iNumBaggage := int(numBaggage)
 	var baggageMap map[string]string
-	if iNumBaggage > 0 {
-		var buf bytes.Buffer // TODO(tschottdorf): candidate for sync.Pool
-		baggageMap = make(map[string]string, iNumBaggage)
-		var keyLen, valLen int32
-		for i := 0; i < iNumBaggage; i++ {
-			if err := binary.Read(baggageReader, binary.BigEndian, &keyLen); err != nil {
-				return nil, opentracing.ErrTraceCorrupted
-			}
-			buf.Grow(int(keyLen))
-			if n, err := io.CopyN(&buf, baggageReader, int64(keyLen)); err != nil || int32(n) != keyLen {
-				return nil, opentracing.ErrTraceCorrupted
-			}
-			key := buf.String()
-			buf.Reset()
 
-			if err := binary.Read(baggageReader, binary.BigEndian, &valLen); err != nil {
-				return nil, opentracing.ErrTraceCorrupted
-			}
-			if n, err := io.CopyN(&buf, baggageReader, int64(valLen)); err != nil || int32(n) != valLen {
-				return nil, opentracing.ErrTraceCorrupted
-			}
-			baggageMap[key] = buf.String()
-			buf.Reset()
+	// Only try to decode the baggage if it has data.
+	if len(splitBinaryCarrier.Baggage) > 0 {
+		baggage := wire.Baggage{}
+		if err := proto.Unmarshal(splitBinaryCarrier.Baggage, &baggage); err != nil {
+			return nil, opentracing.ErrTraceCorrupted
 		}
+		baggageMap = baggage.Items
 	}
 
 	sp := p.tracer.getSpan()
 	sp.raw = RawSpan{
 		Context: Context{
-			TraceID:      traceID,
+			TraceID:      ctx.TraceId,
 			SpanID:       randomID(),
-			ParentSpanID: propagatedSpanID,
-			Sampled:      sampledByte != 0,
+			ParentSpanID: ctx.SpanId,
+			Sampled:      ctx.Sampled,
 		},
 	}
+
 	sp.raw.Baggage = baggageMap
 
 	return p.tracer.startSpanInternal(
