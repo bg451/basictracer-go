@@ -3,9 +3,9 @@ package basictracer_go.wire;
 option go_package = "wire";
 
 message TracerState {
-  int64 trace_id = 1;
-  int64 span_id = 2;
-  bool  sampled = 3;
+  sfixed64 trace_id = 1;
+  sfixed64 span_id = 2;
+  bool    sampled = 3;
 }
 
 message Baggage {

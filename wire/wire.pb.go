@@ -28,8 +28,8 @@ var _ = fmt.Errorf
 var _ = math.Inf
 
 type TracerState struct {
-	TraceId int64 `protobuf:"varint,1,opt,name=trace_id,proto3" json:"trace_id,omitempty"`
-	SpanId  int64 `protobuf:"varint,2,opt,name=span_id,proto3" json:"span_id,omitempty"`
+	TraceId int64 `protobuf:"fixed64,1,opt,name=trace_id,proto3" json:"trace_id,omitempty"`
+	SpanId  int64 `protobuf:"fixed64,2,opt,name=span_id,proto3" json:"span_id,omitempty"`
 	Sampled bool  `protobuf:"varint,3,opt,name=sampled,proto3" json:"sampled,omitempty"`
 }
 
@@ -68,14 +68,14 @@ func (m *TracerState) MarshalTo(data []byte) (int, error) {
 	var l int
 	_ = l
 	if m.TraceId != 0 {
-		data[i] = 0x8
+		data[i] = 0x9
 		i++
-		i = encodeVarintWire(data, i, uint64(m.TraceId))
+		i = encodeFixed64Wire(data, i, uint64(m.TraceId))
 	}
 	if m.SpanId != 0 {
-		data[i] = 0x10
+		data[i] = 0x11
 		i++
-		i = encodeVarintWire(data, i, uint64(m.SpanId))
+		i = encodeFixed64Wire(data, i, uint64(m.SpanId))
 	}
 	if m.Sampled {
 		data[i] = 0x18
@@ -161,10 +161,10 @@ func (m *TracerState) Size() (n int) {
 	var l int
 	_ = l
 	if m.TraceId != 0 {
-		n += 1 + sovWire(uint64(m.TraceId))
+		n += 9
 	}
 	if m.SpanId != 0 {
-		n += 1 + sovWire(uint64(m.SpanId))
+		n += 9
 	}
 	if m.Sampled {
 		n += 2
@@ -229,43 +229,39 @@ func (m *TracerState) Unmarshal(data []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
+			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TraceId", wireType)
 			}
 			m.TraceId = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowWire
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := data[iNdEx]
-				iNdEx++
-				m.TraceId |= (int64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
 			}
+			iNdEx += 8
+			m.TraceId = int64(data[iNdEx-8])
+			m.TraceId |= int64(data[iNdEx-7]) << 8
+			m.TraceId |= int64(data[iNdEx-6]) << 16
+			m.TraceId |= int64(data[iNdEx-5]) << 24
+			m.TraceId |= int64(data[iNdEx-4]) << 32
+			m.TraceId |= int64(data[iNdEx-3]) << 40
+			m.TraceId |= int64(data[iNdEx-2]) << 48
+			m.TraceId |= int64(data[iNdEx-1]) << 56
 		case 2:
-			if wireType != 0 {
+			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SpanId", wireType)
 			}
 			m.SpanId = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowWire
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := data[iNdEx]
-				iNdEx++
-				m.SpanId |= (int64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
 			}
+			iNdEx += 8
+			m.SpanId = int64(data[iNdEx-8])
+			m.SpanId |= int64(data[iNdEx-7]) << 8
+			m.SpanId |= int64(data[iNdEx-6]) << 16
+			m.SpanId |= int64(data[iNdEx-5]) << 24
+			m.SpanId |= int64(data[iNdEx-4]) << 32
+			m.SpanId |= int64(data[iNdEx-3]) << 40
+			m.SpanId |= int64(data[iNdEx-2]) << 48
+			m.SpanId |= int64(data[iNdEx-1]) << 56
 		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Sampled", wireType)

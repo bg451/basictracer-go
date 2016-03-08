@@ -1,8 +1,8 @@
 package wire
 
 // ProtobufCarrier is a DelegatingCarrier that uses protocol buffers as the
-// the underlying datastructur. The reason for implementing DelagatingCarrier
-// is to allow for users to serialize the underlying protocol buffers using
+// the underlying datastructure. The reason for implementing DelagatingCarrier
+// is to allow for end users to serialize the underlying protocol buffers using
 // jsonpb or any other serialization forms they want.
 type ProtobufCarrier struct {
 	TracerState *TracerState
