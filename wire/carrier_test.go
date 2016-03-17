@@ -21,7 +21,7 @@ func TestProtobufCarrier(t *testing.T) {
 	carrier.SetBaggageItem(baggageKey, expVal)
 	gotTraceID, gotSpanID, gotSampled := carrier.State()
 	if traceID != gotTraceID || spanID != gotSpanID || sampled != gotSampled {
-		t.Errorf("Wanted state %d %d %b, got %d %d %b", spanID, traceID, sampled,
+		t.Errorf("Wanted state %d %d %t, got %d %d %t", spanID, traceID, sampled,
 			gotTraceID, gotSpanID, gotSampled)
 	}
 
