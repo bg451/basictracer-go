@@ -1,8 +1,8 @@
 package basictracer
 
 import (
+	"encoding/binary"
 	"io"
-	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +18,7 @@ type textMapPropagator struct {
 type binaryPropagator struct {
 	tracer *tracerImpl
 }
+
 type goHTTPPropagator struct {
 	*textMapPropagator
 }
@@ -149,8 +150,14 @@ func (p *binaryPropagator) Inject(
 	if err != nil {
 		return err
 	}
-	_, err = carrier.Write(b)
 
+	// Write the length of the marshalled binary to the writer.
+	len := uint32(len(b))
+	if err := binary.Write(carrier, binary.BigEndian, &len); err != nil {
+		return err
+	}
+
+	_, err = carrier.Write(b)
 	return err
 }
 
@@ -163,16 +170,24 @@ func (p *binaryPropagator) Join(
 		return nil, opentracing.ErrInvalidCarrier
 	}
 
-	b, err := ioutil.ReadAll(carrier)
-	if err != nil {
+	// Read the length of marshalled binary. io.ReadAll isn't that performant
+	// since it keeps resizing the underlying buffer as it encounters more bytes
+	// to read. By reading the length, we can allocate a fixed sized buf and read
+	// the exact amount of bytes into it.
+	var len uint32
+	if err := binary.Read(carrier, binary.BigEndian, &len); err != nil {
 		return nil, opentracing.ErrTraceCorrupted
 	}
-	if len(b) < 1 {
+	buf := make([]byte, len)
+	n, err := carrier.Read(buf)
+	if n < 1 {
 		return nil, opentracing.ErrTraceNotFound
+	} else if err != nil {
+		return nil, opentracing.ErrTraceCorrupted
 	}
 
 	ctx := wire.TracerState{}
-	if err := proto.Unmarshal(b, &ctx); err != nil {
+	if err := proto.Unmarshal(buf, &ctx); err != nil {
 		return nil, opentracing.ErrTraceCorrupted
 	}
 
