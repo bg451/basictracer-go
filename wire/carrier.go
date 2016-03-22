@@ -4,35 +4,32 @@ package wire
 // the underlying datastructure. The reason for implementing DelagatingCarrier
 // is to allow for end users to serialize the underlying protocol buffers using
 // jsonpb or any other serialization forms they want.
-type ProtobufCarrier struct {
-	TracerState *TracerState
-	Baggage     *Baggage
-}
+type ProtobufCarrier TracerState
 
 func (p *ProtobufCarrier) SetState(traceID, spanID int64, sampled bool) {
-	p.TracerState.TraceId = traceID
-	p.TracerState.SpanId = spanID
-	p.TracerState.Sampled = sampled
+	p.TraceId = traceID
+	p.SpanId = spanID
+	p.Sampled = sampled
 }
 
 func (p *ProtobufCarrier) State() (traceID, spanID int64, sampled bool) {
-	traceID = p.TracerState.TraceId
-	spanID = p.TracerState.SpanId
-	sampled = p.TracerState.Sampled
+	traceID = p.TraceId
+	spanID = p.SpanId
+	sampled = p.Sampled
 	return traceID, spanID, sampled
 }
 
 func (p *ProtobufCarrier) SetBaggageItem(key, value string) {
-	if p.Baggage.Items == nil {
-		p.Baggage.Items = map[string]string{key: value}
+	if p.BaggageItems == nil {
+		p.BaggageItems = map[string]string{key: value}
 		return
 	}
 
-	p.Baggage.Items[key] = value
+	p.BaggageItems[key] = value
 }
 
 func (p *ProtobufCarrier) GetBaggage(f func(k, v string)) {
-	for k, v := range p.Baggage.Items {
+	for k, v := range p.BaggageItems {
 		f(k, v)
 	}
 }

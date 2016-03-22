@@ -2,6 +2,7 @@ package basictracer
 
 import (
 	"io"
+	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
@@ -142,28 +143,15 @@ func (p *binaryPropagator) Inject(
 	state.TraceId = sc.raw.TraceID
 	state.SpanId = sc.raw.SpanID
 	state.Sampled = sc.raw.Sampled
+	state.BaggageItems = sc.raw.Baggage
 
-	contextBytes, err := proto.Marshal(&state)
+	b, err := proto.Marshal(&state)
 	if err != nil {
 		return err
 	}
-	splitBinaryCarrier.TracerState = contextBytes
+	_, err = carrier.Write(b)
 
-	// Only attempt to encode the baggage if it has items.
-	if len(sc.raw.Baggage) > 0 {
-		sc.Lock()
-		baggage := wire.Baggage{}
-		baggage.Items = sc.raw.Baggage
-
-		baggageBytes, err := proto.Marshal(&baggage)
-		sc.Unlock()
-		if err != nil {
-			return err
-		}
-		splitBinaryCarrier.Baggage = baggageBytes
-	}
-
-	return nil
+	return err
 }
 
 func (p *binaryPropagator) Join(
@@ -174,25 +162,18 @@ func (p *binaryPropagator) Join(
 	if !ok {
 		return nil, opentracing.ErrInvalidCarrier
 	}
-	if len(splitBinaryCarrier.TracerState) == 0 {
+
+	b, err := ioutil.ReadAll(carrier)
+	if err != nil {
+		return nil, opentracing.ErrTraceCorrupted
+	}
+	if len(b) < 1 {
 		return nil, opentracing.ErrTraceNotFound
 	}
 
-	// Handle the trace, span ids, and sampled status.
 	ctx := wire.TracerState{}
-	if err := proto.Unmarshal(splitBinaryCarrier.TracerState, &ctx); err != nil {
+	if err := proto.Unmarshal(b, &ctx); err != nil {
 		return nil, opentracing.ErrTraceCorrupted
-	}
-
-	var baggageMap map[string]string
-
-	// Only try to decode the baggage if it has data.
-	if len(splitBinaryCarrier.Baggage) > 0 {
-		baggage := wire.Baggage{}
-		if err := proto.Unmarshal(splitBinaryCarrier.Baggage, &baggage); err != nil {
-			return nil, opentracing.ErrTraceCorrupted
-		}
-		baggageMap = baggage.Items
 	}
 
 	sp := p.tracer.getSpan()
@@ -205,7 +186,7 @@ func (p *binaryPropagator) Join(
 		},
 	}
 
-	sp.raw.Baggage = baggageMap
+	sp.raw.Baggage = ctx.BaggageItems
 
 	return p.tracer.startSpanInternal(
 		sp,

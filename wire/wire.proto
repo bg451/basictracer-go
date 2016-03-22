@@ -6,8 +6,5 @@ message TracerState {
   sfixed64 trace_id = 1;
   sfixed64 span_id = 2;
   bool    sampled = 3;
-}
-
-message Baggage {
-  map<string, string> items = 1;
+  map<string, string> baggage_items = 4;
 }

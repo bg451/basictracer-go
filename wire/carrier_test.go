@@ -8,10 +8,7 @@ import (
 )
 
 func TestProtobufCarrier(t *testing.T) {
-	var carrier basictracer.DelegatingCarrier = &wire.ProtobufCarrier{
-		TracerState: &wire.TracerState{},
-		Baggage:     &wire.Baggage{},
-	}
+	var carrier basictracer.DelegatingCarrier = &wire.ProtobufCarrier{}
 
 	var traceID, spanID int64 = 1, 2
 	sampled := true

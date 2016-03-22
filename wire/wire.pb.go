@@ -10,7 +10,6 @@
 
 	It has these top-level messages:
 		TracerState
-		Baggage
 */
 package wire
 
@@ -28,26 +27,19 @@ var _ = fmt.Errorf
 var _ = math.Inf
 
 type TracerState struct {
-	TraceId int64 `protobuf:"fixed64,1,opt,name=trace_id,proto3" json:"trace_id,omitempty"`
-	SpanId  int64 `protobuf:"fixed64,2,opt,name=span_id,proto3" json:"span_id,omitempty"`
-	Sampled bool  `protobuf:"varint,3,opt,name=sampled,proto3" json:"sampled,omitempty"`
+	TraceId      int64             `protobuf:"fixed64,1,opt,name=trace_id,proto3" json:"trace_id,omitempty"`
+	SpanId       int64             `protobuf:"fixed64,2,opt,name=span_id,proto3" json:"span_id,omitempty"`
+	Sampled      bool              `protobuf:"varint,3,opt,name=sampled,proto3" json:"sampled,omitempty"`
+	BaggageItems map[string]string `protobuf:"bytes,4,rep,name=baggage_items" json:"baggage_items,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (m *TracerState) Reset()         { *m = TracerState{} }
 func (m *TracerState) String() string { return proto.CompactTextString(m) }
 func (*TracerState) ProtoMessage()    {}
 
-type Baggage struct {
-	Items map[string]string `protobuf:"bytes,1,rep,name=items" json:"items,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-}
-
-func (m *Baggage) Reset()         { *m = Baggage{} }
-func (m *Baggage) String() string { return proto.CompactTextString(m) }
-func (*Baggage) ProtoMessage()    {}
-
-func (m *Baggage) GetItems() map[string]string {
+func (m *TracerState) GetBaggageItems() map[string]string {
 	if m != nil {
-		return m.Items
+		return m.BaggageItems
 	}
 	return nil
 }
@@ -87,34 +79,16 @@ func (m *TracerState) MarshalTo(data []byte) (int, error) {
 		}
 		i++
 	}
-	return i, nil
-}
-
-func (m *Baggage) Marshal() (data []byte, err error) {
-	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
-	if err != nil {
-		return nil, err
-	}
-	return data[:n], nil
-}
-
-func (m *Baggage) MarshalTo(data []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if len(m.Items) > 0 {
-		keysForItems := make([]string, 0, len(m.Items))
-		for k, _ := range m.Items {
-			keysForItems = append(keysForItems, k)
+	if len(m.BaggageItems) > 0 {
+		keysForBaggageItems := make([]string, 0, len(m.BaggageItems))
+		for k, _ := range m.BaggageItems {
+			keysForBaggageItems = append(keysForBaggageItems, k)
 		}
-		github_com_gogo_protobuf_sortkeys.Strings(keysForItems)
-		for _, k := range keysForItems {
-			data[i] = 0xa
+		github_com_gogo_protobuf_sortkeys.Strings(keysForBaggageItems)
+		for _, k := range keysForBaggageItems {
+			data[i] = 0x22
 			i++
-			v := m.Items[k]
+			v := m.BaggageItems[k]
 			mapSize := 1 + len(k) + sovWire(uint64(len(k))) + 1 + len(v) + sovWire(uint64(len(v)))
 			i = encodeVarintWire(data, i, uint64(mapSize))
 			data[i] = 0xa
@@ -169,14 +143,8 @@ func (m *TracerState) Size() (n int) {
 	if m.Sampled {
 		n += 2
 	}
-	return n
-}
-
-func (m *Baggage) Size() (n int) {
-	var l int
-	_ = l
-	if len(m.Items) > 0 {
-		for k, v := range m.Items {
+	if len(m.BaggageItems) > 0 {
+		for k, v := range m.BaggageItems {
 			_ = k
 			_ = v
 			mapEntrySize := 1 + len(k) + sovWire(uint64(len(k))) + 1 + len(v) + sovWire(uint64(len(v)))
@@ -282,59 +250,9 @@ func (m *TracerState) Unmarshal(data []byte) error {
 				}
 			}
 			m.Sampled = bool(v != 0)
-		default:
-			iNdEx = preIndex
-			skippy, err := skipWire(data[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthWire
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *Baggage) Unmarshal(data []byte) error {
-	l := len(data)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowWire
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := data[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: Baggage: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: Baggage: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
+		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Items", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field BaggageItems", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -438,10 +356,10 @@ func (m *Baggage) Unmarshal(data []byte) error {
 			}
 			mapvalue := string(data[iNdEx:postStringIndexmapvalue])
 			iNdEx = postStringIndexmapvalue
-			if m.Items == nil {
-				m.Items = make(map[string]string)
+			if m.BaggageItems == nil {
+				m.BaggageItems = make(map[string]string)
 			}
-			m.Items[mapkey] = mapvalue
+			m.BaggageItems[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
